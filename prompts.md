@@ -1,56 +1,66 @@
-Act as a Senior Dynatrace Observability Architect.
+Act as a Senior Dynatrace Observability Architect specializing in Dynatrace Managed, Service Detection v1, Spring Boot, and Kubernetes.
 
-We use Dynatrace Managed (Service Detection v1) to monitor Spring Boot applications running on Kubernetes.
+## Context
 
-For one workload, Dynatrace detects:
-- Tomcat: Web request service
-- Spring controller: Web service
-- Java: Background activity service
+We use Dynatrace Managed (SDv1) to monitor Spring Boot microservices with embedded Tomcat running on Kubernetes.
 
-Our SDv1 service-detection rule categories have zero configured rules.
+Our non-production Kubernetes cluster contains namespaces `myapp-development`, `myapp-int`, and `myapp-uat`, with corresponding Dynatrace management zones.
+
+For a single Kubernetes workload, Dynatrace may detect multiple service entities:
+
+- **Tomcat icon — Web request services:** Potentially multiple entities associated with different pod replicas of the same deployment.
+- **Spring icon — Web services:** Potentially multiple entities representing individual Spring REST controllers.
+- **Java icon — Background activity services:** Entities representing background execution.
+
+These are observed service types, not necessarily the correct architectural boundaries. Do not assume there are exactly three services or that every replica/controller necessarily creates a separate entity.
+
+Our four SDv1 service-detection rule categories currently contain zero configured custom rules.
 
 You have access to `dtmgd` and `kubectl`.
 
-**Your mission is to investigate the current behavior and recommend the best architecture, without modifying anything.**
+## Objective
 
-1. Identify the Kubernetes workload, process groups, and corresponding Dynatrace services.
-2. Inspect service identification, naming, detected technologies, and relevant configuration.
-3. Analyze representative PurePaths to understand why the Tomcat and Spring services are detected separately.
-4. Investigate what the Java background activity service represents.
-5. Determine the recommended Dynatrace SDv1 service model for this Spring Boot application.
-6. If consolidation is appropriate, investigate `builtin:service-detection.full-web-service` and `detectAsWebRequestService`.
-7. Evaluate the safest way to scope a potential rule exclusively to our application in `myapp-development`, considering management zones, process-group tags, and namespace metadata.
+Audit how Dynatrace identifies, groups, and names services belonging to our Kubernetes workload. Determine the recommended architecture according to official Dynatrace best practices.
 
-**Principles:**
-- Prefer official Dynatrace recommendations and built-in behavior.
-- Challenge the assumption that consolidation is necessary.
-- Verify against our actual Dynatrace API schemas and existing configuration.
-- Distinguish service identity, service naming, and process-group detection.
-- Do not modify Dynatrace or Kubernetes resources.
+## Investigation
 
-**Deliverable:** A concise technical assessment with root cause, supporting evidence, recommended target architecture, proposed configuration and scope, potential risks, and an implementation/validation plan.
+1. Discover the actual Kubernetes Deployment, pods, replicas, labels, namespaces, and associated Dynatrace process groups and service entities.
+2. Inventory all detected Web request, Web service, and Background activity entities, including their IDs, names, detection properties, and relationships.
+3. Investigate **replica-level fragmentation**: Are multiple Tomcat Web request services created for replicas of the same workload? If so, why aren't they grouped? Examine process-group detection, service identifiers, and Kubernetes workload metadata.
+4. Investigate **controller-level fragmentation**: Are Spring REST controllers detected as separate Web services? Determine whether these represent meaningful service boundaries or unnecessary fragmentation.
+5. Investigate Background activity services and whether their separation is legitimate.
+6. Review the current SDv1 default behavior and relevant configuration, distinguishing process-group detection, service detection, and service naming.
+7. Evaluate whether `builtin:service-detection.full-web-service` with `idContributors.detectAsWebRequestService = true` is appropriate for controller consolidation. Do not assume it also solves replica-level fragmentation.
+8. Determine how a custom rule, if needed, can be scoped exclusively to our application in `myapp-development`, comparing management zones, process-group tags, and Kubernetes metadata.
 
-Do not proceed to implementation.
+## PurePath
 
-TWO:
+Use available Dynatrace APIs to investigate service relationships and execution flows.
 
-Continue from the Dynatrace SDv1 audit and approved architecture recommendation.
+If `dtmgd` cannot retrieve individual PurePaths, identify the exact manual checks required in Dynatrace's UI.
 
-Your mission is to implement the recommended configuration and validate the result.
+Do not claim trace-level evidence without inspecting actual traces.
 
-1. Reconfirm the existing configuration and retrieve the actual Dynatrace schema before making changes.
-2. Apply only the necessary service-detection rule, using the narrowest verified scope for our application in `myapp-development`.
-3. Ensure no unrelated Kubernetes workload, management zone, or existing detection rule is affected.
-4. Validate the resulting service topology, request attribution, metrics, and representative PurePaths using new monitoring data.
-5. Confirm that legitimate background activity remains observable.
-6. Document the applied configuration, before/after results, any limitations, and the exact rollback procedure.
+## Architectural principles
 
-**Constraints:**
-- Do not change Kubernetes workloads.
-- Do not modify production or other environments.
-- Do not modify or delete existing shared rules.
-- If the implementation differs materially from the approved design, stop and explain why instead of improvising.
-- If safe scope isolation cannot be demonstrated, do not activate the rule.
-- Never claim successful validation without evidence.
+- Distinguish default Dynatrace behavior from officially recommended practices.
+- Challenge existing service boundaries rather than accepting them automatically.
+- Prefer grouping replicas of the same logical service when technically appropriate.
+- Avoid unnecessary controller-level fragmentation while preserving meaningful service boundaries.
+- Preserve legitimate background activity monitoring.
+- Prefer built-in functionality before introducing custom rules.
+- Verify all recommendations against the actual Dynatrace Managed schemas and official documentation.
 
-Prefer the smallest, safest change consistent with Dynatrace best practices.
+## Deliverable
+
+Provide a concise technical assessment covering:
+
+1. **Current topology:** Kubernetes Deployment → Pods → Process groups → Dynatrace Services.
+2. **Root causes:** Explain replica-level and controller-level fragmentation separately.
+3. **Recommended target topology:** How many logical Dynatrace services should exist per Kubernetes workload, and why?
+4. **Recommended configuration:** Default settings, process-group adjustments, detection rules, or naming rules where justified.
+5. **Implementation strategy:** Exact scoping, risks, validation steps, and expected impact.
+
+**READ-ONLY investigation. Do not modify Dynatrace or Kubernetes.**
+
+Prioritize evidence, official best practices, and the simplest sustainable architecture.
